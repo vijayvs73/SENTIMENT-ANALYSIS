@@ -1,0 +1,11 @@
+# Gradio Interface
+interface = gr.Interface(
+    fn=predict_sentiment,
+    inputs=gr.Textbox(lines=4, placeholder="Enter a movie review here..."),
+    outputs="text",
+    title="🎬 IMDb Sentiment Analyzer",
+    description="Enter a movie review and get the predicted sentiment (Positive or Negative)."
+)
+
+# Launch App
+interface.launch()
