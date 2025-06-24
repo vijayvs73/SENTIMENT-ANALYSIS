@@ -1,0 +1,114 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from wordcloud import WordCloud
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+import nltk
+import string
+import plotly.express as px
+from collections import Counter
+import joblib
+import gradio as gr
+
+# Download required NLTK data
+nltk.download('punkt')
+nltk.download('stopwords')
+
+# Load Dataset
+df = pd.read_csv(r"C:\Users\ASUS\OneDrive\Desktop\IMDB Dataset.csv")
+
+# Add Review Length Column
+df['review_length'] = df['review'].str.len()
+
+# Interactive Sentiment Distribution Chart
+fig = px.histogram(
+    df,
+    x="sentiment",
+    color="sentiment",
+    title="Interactive Sentiment Distribution",
+    labels={"sentiment": "Review Sentiment"},
+    color_discrete_sequence=["lightgreen", "salmon"]
+)
+fig.update_layout(bargap=0.3)
+fig.show()
+
+# Interactive Review Length Distribution
+fig2 = px.histogram(df, x='review_length', nbins=50, color='sentiment',
+                    marginal='box',
+                    title="Review Length by Sentiment",
+                    labels={'review_length': 'Length of Review'},
+                    color_discrete_map={'positive': 'lightblue', 'negative': 'orange'})
+fig2.update_layout(bargap=0.1)
+fig2.show()
+
+# Top 20 Most Common Words
+all_words = " ".join(df['review']).split()
+word_freq = Counter(all_words)
+top_words_df = pd.DataFrame(word_freq.most_common(20), columns=['Word', 'Count'])
+fig3 = px.bar(top_words_df, x='Word', y='Count',
+              title="Top 20 Most Common Words",
+              text='Count', color='Count',
+              color_continuous_scale='teal')
+fig3.show()
+
+# Clean Text Function
+stop_words = set(stopwords.words('english'))
+def clean_text(text):
+    tokens = word_tokenize(text.lower())
+    words = [w for w in tokens if w.isalpha() and w not in stop_words]
+    return " ".join(words)
+
+df['clean_review'] = df['review'].apply(clean_text)
+
+# Generate WordClouds
+positive_text = " ".join(df[df['sentiment'] == 'positive']['clean_review'])
+negative_text = " ".join(df[df['sentiment'] == 'negative']['clean_review'])
+
+wc_pos = WordCloud(width=800, height=400, background_color='white').generate(positive_text)
+plt.imshow(wc_pos, interpolation='bilinear')
+plt.axis('off')
+plt.title("WordCloud: Positive Reviews")
+plt.show()
+
+wc_neg = WordCloud(width=800, height=400, background_color='black', colormap='Pastel1').generate(negative_text)
+plt.imshow(wc_neg, interpolation='bilinear')
+plt.axis('off')
+plt.title("WordCloud: Negative Reviews")
+plt.show()
+
+# Sentiment Classification
+df['label'] = df['sentiment'].map({'positive': 1, 'negative': 0})
+vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
+X = vectorizer.fit_transform(df['review'])
+y = df['label']
+
+# Train-Test Split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+model = LogisticRegression()
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+# Evaluation
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+
+# Save Model and Vectorizer
+joblib.dump(model, "sentiment_model.pkl")
+joblib.dump(vectorizer, "vectorizer.pkl")
+
+# Load Model for Gradio
+model = joblib.load("sentiment_model.pkl")
+vectorizer = joblib.load("vectorizer.pkl")
+
+# Define Prediction Function
+def predict_sentiment(text):
+    X = vectorizer.transform([text])
+    prediction = model.predict(X)[0]
+    return "Positive" if prediction == 1 else "Negative"
+
+
